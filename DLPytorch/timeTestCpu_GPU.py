@@ -45,8 +45,8 @@ print("after autograd:",grads)
 
 ##3. 线性回归问题
 
-
 ##4. 手写数字识别，MNIST数据集
+
 
 
 
