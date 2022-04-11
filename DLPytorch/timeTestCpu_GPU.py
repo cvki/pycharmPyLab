@@ -204,27 +204,33 @@ def train():
     begin=time.time()
     for epoch in range(EPOCHS):
         for batch_idx,(pic,tag) in enumerate(train_data):  # batch轮数,训练集
+            # 数据放到GPU上,.cuda()表示放到默认GPU,指定GPU时用cuda中的device设定
             pic=pic.cuda()
             tag=tag.cuda()
-            tag_ = nn_net(pic)    # 使用默认GPU,tag_是nn_net返回值,是batchsize*10的shape,是全连接的最后结果,但是注意,
+            '前馈网络训练'
+            tag_ = nn_net(pic)    # nn_net在实例化已放入GPU,tag_是nn_net返回值,是batchsize*10的shape,是全连接的最后结果,但是注意,
             #在nn_net()中没有e^x和log以及NLLoss,因此它并不是概率值,但它经过e^x和log(softmax,NLLoss)仍然是单调的,那此时值的大小可以理解为概率大小
             # print('tag_:', tag_)
             loss = loss_fun(tag_, tag)  # 计算loss
+            '计算准确率,注意理解每一步在干什么'
             tag_v=torch.max(tag_,1)[1].cuda()    # 获得batchsize里最大概率对应的标签
             acc=(tag_v==tag).sum()*1.0/BATCH_SIZE       # 获得预测准的总和,除去总预测的数据条目,化作准确率
+            '反向传播','更新梯度'
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()  # 每次epoch训练后梯度清零(因为pytorch等DL框架会一直累积梯度)
             print('batch:',batch_idx,'\t','loss:',loss,'\t','accurancy:',acc)
-            loss_f.append(loss)
+            loss_f.append(loss)         # 存储每个batch_size的损失和准确率,用来画图,分析
             acc_f.append(acc)
-    loss_plt=torch.Tensor(loss_f).cpu().numpy()
-    acc_plt=torch.Tensor(acc_f).cpu().numpy()
+    loss_plt=torch.Tensor(loss_f).cpu().numpy()        # loss_f和acc_f应该在GPU中,如果不转换到cpu上,会报设备错误
+    acc_plt=torch.Tensor(acc_f).cpu().numpy()          #与上同理
     end=time.time()
-    print('use time:',end-begin)
-    print(np.shape(acc_plt),'\t',np.shape(loss_plt))
-    # print(loss_plt,'\n',acc_plt)
-    plt_md(loss_plt,acc_plt)
+    print('use time:',end-begin)      # 测试运行时间
+    # print(np.shape(acc_plt),'\t',np.shape(loss_plt))    # 输出维度,这里是总数据/batch_size个,所以画图函数中的维度也是这个
+    print(loss_plt,'\n',acc_plt)
+    # 保存网络模型
+    torch.save(nn_net,r'Model\MNIST.pt')
+    plt_md(loss_plt,acc_plt)    # 画出loss和accuracy图
 
 
 def test():
