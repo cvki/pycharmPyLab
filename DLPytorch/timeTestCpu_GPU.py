@@ -59,52 +59,47 @@
  h.定义训练和测试方法
  i.开始训练 for...
  j.测试并分析结果     '''
-import time
-
-from torch import Tensor
 
 '''a. 导入包'''
 import torch
 import numpy as np
-from torchvision import transforms,datasets
+from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import matplotlib.pyplot as plt
+import time
 import cv2
 
-# torch.cuda.set_device(0)
-
 '''b. 定义超参和全局模型评估参数'''
-EPOCHS=1  # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
-BATCH_SIZE=200  # 每批次处理数据数量
-DEVICE=torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # cuda或cpu
-LR=0.002  # 学习率
+EPOCHS = 3  # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
+BATCH_SIZE = 200  # 每批次处理数据数量
+DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # cuda或cpu
+LR = 0.002  # 学习率
 # MMTM=0.8      # SGD动量法优化时
 
-# 定义评估参数
-acc_f=[]     # 每次Epoch的当前准确率
-loss_f=[]    # 每次Epoch的当前loss
-var_f=[]     # 每次Epoch的当前方差
-
-
-
+# 定义和存储评估参数
+acc_f = []  # 每次Epoch的当前准确率
+loss_f = []  # 每次Epoch的当前loss
+var_f = []  # 每次Epoch的当前方差
+test_loss = []  # test-loss
+test_acc = []  # test-acc
 
 '''c. 定义预处理操作,tv.transforms'''
-pipline=transforms.Compose([   # Compose用来组合transforms的预处理操作
-        transforms.ToTensor(),   # 将图片转为Tensor格式
-        transforms.Normalize((0.1307,), (0.3081,))    # 标准化数据集. 这里是MINIST的mean和std，将所有数据展开(6w,1,28,28)，然后用mean和std求解就行，结果一样
-        #  注意这里的参数mean和std是sequence,API在官网:
-        #  https://pytorch.org/vision/stable/generated/torchvision.transforms.Normalize.html?highlight=normalize#torchvision.transforms.Normalize
-        #  这里没有shuffle，shuffle在这里设计没意义, 在Dataloader中加入shuffle才使得操作有意义，因此shuffle在Dataloader中
+pipline = transforms.Compose([  # Compose用来组合transforms的预处理操作
+    transforms.ToTensor(),  # 将图片转为Tensor格式
+    transforms.Normalize((0.1307,), (0.3081,))  # 标准化数据集. 这里是MINIST的mean和std，将所有数据展开(6w,1,28,28)，然后用mean和std求解就行，结果一样
+    #  注意这里的参数mean和std是sequence,API在官网:
+    #  https://pytorch.org/vision/stable/generated/torchvision.transforms.Normalize.html?highlight=normalize#torchvision.transforms.Normalize
+    #  这里没有shuffle，shuffle在这里设计没意义, 在Dataloader中加入shuffle才使得操作有意义，因此shuffle在Dataloader中
 ])
 
 '''d. datasets和DataLoader进行输入数据的加载和封装'''
 # 下载和预处理数据, dataset主要负责对数据和数据的预处理(训练前)操作的封装
-train_set=datasets.MNIST(root=r'../../Datas/MNIST',train=True,transform=pipline,download=True)
-test_set=datasets.MNIST(root=r'../../Datas/MNIST',train=False,transform=pipline,download=True)
+train_set = datasets.MNIST(root=r'../../Datas/MNIST', train=True, transform=pipline, download=True)
+test_set = datasets.MNIST(root=r'../../Datas/MNIST', train=False, transform=pipline, download=True)
 # 加载数据, Dataloader主要是负责对数据在训练过程的封装
-train_data=DataLoader(dataset=train_set,batch_size=BATCH_SIZE,shuffle=True)
-test_data=DataLoader(dataset=test_set,batch_size=BATCH_SIZE,shuffle=False)
+train_data = DataLoader(dataset=train_set, batch_size=BATCH_SIZE, shuffle=True)
+test_data = DataLoader(dataset=test_set, batch_size=BATCH_SIZE, shuffle=False)
 # '''可以进入目录查看相关数据集，发现其格式不能直接查看图片，那可以插入python代码，使用python查看其中的图片'''
 # with open(r'D:\Pycharm\Datas\MNIST\MNIST\raw\train-images-idx3-ubyte','rb') as f:   #用'rb'即二进制读的权限进行读取(先解码后读取)
 #         file=f.read()   # file拿到了所有二进制数据流('rb')，file此时存储的是原生二进制数据流
@@ -115,142 +110,177 @@ test_data=DataLoader(dataset=test_set,batch_size=BATCH_SIZE,shuffle=False)
 # cv2.imshow('01',image_t)     # 显示图片
 # cv2.waitKey(0)
 
-# 获得一个epoch进行多少次循环:
-every_loop=len(train_set)/BATCH_SIZE
-print('everyloop: ',every_loop)
+# 训练时，计算一个epoch进行多少次循环:
+every_train_loop = len(train_set) / BATCH_SIZE
+print('every_train_loop: ', every_train_loop)
+# 测试时，计算一个epoch进行多少次循环:
+every_test_loop = len(test_set) / BATCH_SIZE
+print('every_test_loop: ', every_test_loop)
 
 
 '''e. 构建网络模型'''
 class Net(nn.Module):
     def __init__(self):
-        super(Net,self).__init__()
-        self.conv1=nn.Sequential(                               # 输入: batch*1*28*28
-            nn.Conv2d(in_channels=1,out_channels=10,kernel_size=3,padding='same'),    # 得到 batch*10*28*28,因为有padding
+        super(Net, self).__init__()
+        self.conv1 = nn.Sequential(  # 输入: batch*1*28*28
+            nn.Conv2d(in_channels=1, out_channels=10, kernel_size=3, padding='same'),  # 得到 batch*10*28*28,因为有padding
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2)     # 得到 batch*10*14*14,padding左右各填充一层
+            nn.MaxPool2d(kernel_size=2)  # 得到 batch*10*14*14,padding左右各填充一层
         )
         self.conv2 = nn.Sequential(
-                nn.Conv2d(in_channels=10, out_channels=20,kernel_size=3,padding='same'),   # 得到 batch*20*14*14
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=2)     # 得到 batch*20*7*7，同理，padding=‘same’模式, 左右各填充一层
+            nn.Conv2d(in_channels=10, out_channels=20, kernel_size=3, padding='same'),  # 得到 batch*20*14*14
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2)  # 得到 batch*20*7*7，同理，padding=‘same’模式, 左右各填充一层
         )
         self.conv3 = nn.Sequential(
-                nn.Conv2d(in_channels=20, out_channels=30, kernel_size=3,padding=0),      # 得到 batch*30*4*4,此时无padding
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=2)     # 得到 batch*30*2*2
+            nn.Conv2d(in_channels=20, out_channels=30, kernel_size=3, padding=0),  # 得到 batch*30*4*4,此时无padding
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2)  # 得到 batch*30*2*2
         )
-        self.fc=nn.Linear(120,out_features=10)      # 输入features batch*30*2*2 输出为待分类数目
+        self.fc = nn.Linear(120, out_features=10)  # 输入features batch*30*2*2 输出为待分类数目
         # self.softmax=nn.Softmax()
-    def forward(self,x):        # x为batch输入
+
+    def forward(self, x):  # x为batch输入
         # print('the x dim: ',np.shape(x))
-        x=self.conv1(x)
+        # input_size=x.size(0)     # batch_size*1*28*28,那size(0)=batch_size
+        x = self.conv1(x)
         # print('after conv1: ',np.shape(x))
-        x=self.conv2(x)
+        x = self.conv2(x)
         # print('after conv2: ',np.shape(x))
-        x=self.conv3(x)
+        x = self.conv3(x)
         # print('after conv3: ',np.shape(x))      # 三层之后, 此时是batch_size*120
-        x=x.reshape(-1,120)     # 自动求出-1，但上面定义的全连接是120,因此如果下一步用那层全连接,第二维必须是120
+        x = x.reshape(-1, 120)  # 自动求出-1，但上面定义的全连接是120,因此如果下一步用那层全连接,第二维必须是120
         # print('after flatten: ', np.shape(x))
-        x=self.fc(x)     # torch.flatten(x) 展开为一维向量送入全连接
+        # x=x.view(input_size,-1)   # 将x拉成向量，inputsize已知时，-1处自动计算它的值
+        x = self.fc(x)  # torch.flatten(x) 展开为一维向量送入全连接
         # print('after fc: ',np.shape(x))
         # x=self.softmax
         # print('after softmax--end: ',np.shape(x))
-        return x
+        return x  # x不是概率或损失，而是全连接的最终输出值
+
 
 '''注意创建一个模型实例，下面会用到'''
-nn_net=Net().cuda()     # 使用默认GPU
+nn_net = Net().cuda()  # 使用默认GPU
 print(nn_net)
+
+
 '''f.定义损失函数和优化器'''
-loss_fun=nn.CrossEntropyLoss()
-optimizer=torch.optim.Adam(params=nn_net.parameters(),lr=LR)
+loss_fun = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(params=nn_net.parameters(), lr=LR)
+
 
 '''g.定义画图'''
 # def plt_md(acc_model,loss_model,var_model):    # 精度图,loss图,方差图
-def plt_md(*kwg):    # 精度图,loss图,方差图
-    y_loss, y_acc= kwg
-    x=np.linspace(1,int(every_loop),int(every_loop))      # 由于比较简单,因此不用EPOCH
+def plt_md(str, *kwg):  # 精度图,loss图,方差图
+    y_loss, y_acc, x_range = kwg
+    x = np.linspace(1, x_range, x_range)  # x的范围
     # y_var=var
-    plt.plot(x,y_loss,label='loss')
-    plt.plot(x,y_acc,label='acc')
+    ytick = np.arange(0, 2.5, 0.1)  # 设置y的坐标和间隔标准
+    plt.xlabel('x axis')  # 设置x和y的标题标签
+    plt.ylabel('y axis')
+    plt.title(str)
+    plt.yticks(ytick)  # 设置y的坐标和间隔
+    plt.plot(x, y_loss, label='loss')
+    plt.plot(x, y_acc, label='acc')
     # plt.plot(x,y_var,label='var')
     plt.legend()
+    plt.savefig(r'./Model/pic_analyse/{}.png'.format(str))
     plt.show()
 
 
 '''h.定义训练和测试方法'''
-def train():
-    run_loss=0.0        # 每次epoch的损失清零
-    run_acc=0.0         # 训练精度
+def train(epoch):
+    run_loss = 0.0  # 每次epoch的损失清零
+    run_acc = 0.0  # 训练精度
     # 简单多分类问题中，暂时用不到
     # predicate_acc=0.0         # 查准率
     # predicate_all=0.0         # 查全率
     # predicate_opt=[]           # 预测正样本的数目
 
-    # nn_net.train()
-    # for epoch in range(EPOCHS):
-    #     for batch_idx,data in enumerate(train_data):  # batch轮数,训练集
-    #         pic,tag = data    # 解包: (数据，标签)=训练集
-    #         pic=pic.cuda()     # 使用默认GPU
-    #         tag=tag.cuda()       # 使用默认GPU
-    #         # pic,tag=pic.to(DEVICE).float(),tag.to(.to(DEVICE))
-    #         tag_ = nn_net(pic).cuda()  # 训练结果tag_
-    #         loss = loss_fun(tag_, tag)  # 计算loss
-    #         loss.backward()
-    #         optimizer.zero_grad()  # 每次epoch训练后梯度清零(因为pytorch等DL框架会一直累积梯度)
-    #         optimizer.step()
-    #
-    #         print('epoch:',epoch,'\t','loss:',loss)
+    nn_net.train()  # 模型训练
 
-    begin=time.time()
-    for epoch in range(EPOCHS):
-        for batch_idx,(pic,tag) in enumerate(train_data):  # batch轮数,训练集
-            # 数据放到GPU上,.cuda()表示放到默认GPU,指定GPU时用cuda中的device设定
-            pic=pic.cuda()
-            tag=tag.cuda()
-            '前馈网络训练'
-            tag_ = nn_net(pic)    # nn_net在实例化已放入GPU,tag_是nn_net返回值,是batchsize*10的shape,是全连接的最后结果,但是注意,
-            #在nn_net()中没有e^x和log以及NLLoss,因此它并不是概率值,但它经过e^x和log(softmax,NLLoss)仍然是单调的,那此时值的大小可以理解为概率大小
-            # print('tag_:', tag_)
-            loss = loss_fun(tag_, tag)  # 计算loss
-            '计算准确率,注意理解每一步在干什么'
-            tag_v=torch.max(tag_,1)[1].cuda()    # 获得batchsize里最大概率对应的标签
-            acc=(tag_v==tag).sum()*1.0/BATCH_SIZE       # 获得预测准的总和,除去总预测的数据条目,化作准确率
-            '反向传播','更新梯度'
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()  # 每次epoch训练后梯度清零(因为pytorch等DL框架会一直累积梯度)
-            print('batch:',batch_idx,'\t','loss:',loss,'\t','accurancy:',acc)
-            loss_f.append(loss)         # 存储每个batch_size的损失和准确率,用来画图,分析
-            acc_f.append(acc)
-    loss_plt=torch.Tensor(loss_f).cpu().numpy()        # loss_f和acc_f应该在GPU中,如果不转换到cpu上,会报设备错误
-    acc_plt=torch.Tensor(acc_f).cpu().numpy()          #与上同理
-    end=time.time()
-    print('use time:',end-begin)      # 测试运行时间
-    # print(np.shape(acc_plt),'\t',np.shape(loss_plt))    # 输出维度,这里是总数据/batch_size个,所以画图函数中的维度也是这个
-    print(loss_plt,'\n',acc_plt)
-    # 保存网络模型
-    torch.save(nn_net,r'Model\MNIST.pt')
-    plt_md(loss_plt,acc_plt)    # 画出loss和accuracy图
+    for batch_idx, (pic, tag) in enumerate(train_data):  # batch轮数,训练集
+        # 数据放到GPU上,.cuda()表示放到默认GPU,指定GPU时用cuda中的device设定
+        pic = pic.cuda()
+        tag = tag.cuda()
+        '前馈网络训练'
+        tag_ = nn_net(pic)  # nn_net在实例化已放入GPU,tag_是nn_net返回值,是batchsize*10的shape,是全连接的最后结果,但是注意,
+        # 在nn_net()中没有e^x和log以及NLLoss,因此它并不是概率值,但它经过e^x和log(softmax,NLLoss)仍然是单调的,那此时值的大小可以理解为概率大小
+        # print('tag_:', tag_)
 
+        '计算loss'
+        loss = loss_fun(tag_, tag)
+        loss_f.append(loss.item())  # 存储每个batch_size的损失和准确率,用来画图,分析
+
+        '计算准确率,注意理解每一步在干什么'
+        # tag_v=torch.max(tag_,1)[1].cuda()    # 获得batchsize里最大概率对应的标签,或者使用下面的一句
+        tag_v = torch.argmax(tag_, dim=1).cuda()
+        acc = (tag_v == tag).sum() * 1.0 / BATCH_SIZE  # 获得预测准的总和,除去总预测的数据条目,化作准确率,注意这里的准确率计算是分batch的，而不是整个训练集
+        acc_f.append(acc.item())
+
+        '反向传播'
+        loss.backward()
+        '更新梯度'
+        optimizer.step()
+        optimizer.zero_grad()  # 每次epoch训练后梯度清零(因为pytorch等DL框架会一直累积梯度)
+        # 不加item()会输出该Tensor，里面有具体数据，也有些其他的，比如Device设备等
+        print('batch_idx:{}\tepoch:{}\tloss:{:.5}\taccurancy:\t{:.3}'.format(batch_idx, epoch, loss.item(), acc.item()))
+    # return loss_f, acc_f      # 当为全局变量时，不用返回
 
 def test():
-    pass
+    # 加载模型
+    nn_net = torch.load(r'Model\MNIST.pt')
+    # test不用epoch
+    nn_net.eval()  # 模型验证
+    with torch.no_grad():  # 因为这边是测试，因此不需要梯度，或者说不用计算梯度，也不能反向传播
+        # 部署数据到CUDA
+        for (data, tag) in test_data:  # 这里用enumerate()会出问题
+            data, tag = data.to(DEVICE), tag.to(DEVICE)
+            tag_test = nn_net(data)  # 进行测试
+            los_avg = 0.0  # 存储平均损失
+            v_t = None
 
+            # 计算损失
+            loss = loss_fun(tag_test, tag)
+            # test_loss.append(loss_t.item())     # 将损失放到test-loss中
+            loss_t = 0.0
+            loss_t += loss.item()  # 在测试中，test_loss保存的是累积损失值
+            test_loss.append(loss_t)  # 加到全局损失变量中，用于分析和作图
+
+            # 计算准确度
+            acc_count = torch.argmax(tag_test, dim=1).to(DEVICE)  # 获取测试tag的标签值并放于CUDA中
+            acc_t = (acc_count == tag).sum() * 1.0 / BATCH_SIZE  # 计算测试准确度,注意，这里也是分batch测试的，而不是整个test_set
+            test_acc.append(acc_t.item())
+            # 或者使用下面的代码计算准确度
+            # pred = tag_test.max(1, keepdim=True)[1]  # 获取预测类别值
+            # correct = 0.0
+            # correct += pred.eq(tag_test.view_as(pred)).sum().item()
+            # v_t.append(np.array([acc_t.item(), correct]))
+            print('loss:{}\taccurancy:{}'.format(loss, acc_t))
+        los_avg = np.mean(test_loss)  # 计算平均损失
+        acc_avg = np.mean(test_acc)  # 计算平均精度
+        # print('v_t',v_t)
+        print('los_avg:', los_avg, '\t', 'acc_avg:', acc_avg)
+        plt_md('test_pic', test_loss, test_acc, int(every_test_loop))  # 画出测试图
 
 
 '''i.开始训练'''
+def train_on():
+    begin = time.time()
+    for epoch in np.arange(1, EPOCHS + 1):
+        train(epoch)
+    end = time.time()
+    print('use time:', end - begin)  # 测试运行时间
+    loss_plt = torch.Tensor(loss_f).cpu().numpy()  # loss_f和acc_f应该在GPU中,如果不转换到cpu上,会报设备错误
+    acc_plt = torch.Tensor(acc_f).cpu().numpy()  # 与上同理
+    # print(np.shape(acc_plt),'\t',np.shape(loss_plt))    # 输出维度,这里是总数据/batch_size个,所以画图函数中的维度也是这个
+    # print(loss_plt, '\n', acc_plt)
+    # 保存网络模型
+    torch.save(nn_net, r'Model\MNIST.pt')
+    plt_md('train_pic', loss_plt, acc_plt, int(EPOCHS * every_train_loop))  # 画出loss和accuracy图
+
+train_on()
 
 
 '''j.测试并分析'''
-
-
-
-loss=train()
-
-
-
-
-
-
-
-
+test()
