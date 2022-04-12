@@ -68,10 +68,11 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import time
-import cv2
+import cv2.cv2 as cv
+import os
 
 '''b. 定义超参和全局模型评估参数'''
-EPOCHS = 3  # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
+EPOCHS = 2  # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
 BATCH_SIZE = 200  # 每批次处理数据数量
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # cuda或cpu
 LR = 0.002  # 学习率
@@ -124,21 +125,24 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv1 = nn.Sequential(  # 输入: batch*1*28*28
             nn.Conv2d(in_channels=1, out_channels=10, kernel_size=3, padding='same'),  # 得到 batch*10*28*28,因为有padding
+            # nn.BatchNorm2d(10),      # num_features:为输入的数据的通道数,即特征数。通过测试，加上该层收敛较快，波动较小，有dropout的感觉，不加收敛较慢，波动较慢
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2)  # 得到 batch*10*14*14,padding左右各填充一层
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(in_channels=10, out_channels=20, kernel_size=3, padding='same'),  # 得到 batch*20*14*14
+            # nn.BatchNorm2d(20),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2)  # 得到 batch*20*7*7，同理，padding=‘same’模式, 左右各填充一层
         )
         self.conv3 = nn.Sequential(
             nn.Conv2d(in_channels=20, out_channels=30, kernel_size=3, padding=0),  # 得到 batch*30*4*4,此时无padding
+            # nn.BatchNorm2d(30),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2)  # 得到 batch*30*2*2
         )
         self.fc = nn.Linear(120, out_features=10)  # 输入features batch*30*2*2 输出为待分类数目
-        # self.softmax=nn.Softmax()
+        # self.softmax=nn.Softmax()     # 这里加上softmax，后面再用loss交叉熵，很容易下溢
 
     def forward(self, x):  # x为batch输入
         # print('the x dim: ',np.shape(x))
@@ -154,7 +158,7 @@ class Net(nn.Module):
         # x=x.view(input_size,-1)   # 将x拉成向量，inputsize已知时，-1处自动计算它的值
         x = self.fc(x)  # torch.flatten(x) 展开为一维向量送入全连接
         # print('after fc: ',np.shape(x))
-        # x=self.softmax
+        # x=self.softmax(x)     # 这里加上softmax，后面再用loss交叉熵，很容易下溢
         # print('after softmax--end: ',np.shape(x))
         return x  # x不是概率或损失，而是全连接的最终输出值
 
@@ -284,3 +288,52 @@ train_on()
 
 '''j.测试并分析'''
 test()
+
+
+'''识别自己的手写数据(自己画图测试的几个)'''
+class GetImg:
+    def __init__(self, pathx):
+        self.pathx = pathx      # 文件路径
+        self.dirs = os.listdir(pathx)       # 所有文件名
+        self.files=[]       #  存放每个文件的路径+文件名
+        for filename in self.dirs:
+            file_tmp=os.path.join(pathx,filename)    # 获取每个文件的路径+文件名
+            self.files.append(file_tmp)
+    def pre_possess(self,path):
+        idx=np.arange(1,len(self.dirs)+1)
+        for i,imgpath in zip(idx,self.files):   # 这里注意zip和enumerate的区别
+            print(type(i))
+            img=cv.imread(imgpath)      # 通过文件路径读图片
+            imgv=cv.resize(img,(28,28))     # resize并保存，用来测试
+            # 批量保存图片并自动命名
+            cv.imwrite(path+'\\'+'pic%d.jpg'%i,imgv)
+            # cv.imshow('img{}'.format(i),imgv)
+            # cv.waitKey(0)
+    def getfile(self):
+        return self.pathx, self.files
+
+# 该例子已经处理好自己手写的图片了，就不再运行
+# gi = GetImg(r'D:\Pycharm\workplace\DLPytorch\Model\Manual_num')
+# gi.pre_possess()
+
+def test_man(path):     # path为手写图片的存储路径
+    res=[]      # 用来存储预测值
+    nn.net=torch.load(r'Model\MNIST.pt')       # 加载模型
+    img_files=GetImg(path)      # 加载图片
+    # img_files.pre_possess(path)     # 这里已经有处理好的图片了，所以就执行它了
+    # print(img_files.getfile())
+    _,pics=img_files.getfile()      # 我们只需要self.files，即图片路径+图片名
+    for imgs in pics:
+        img_np=cv.imread(imgs,flags=0)     # 灰度图读入
+        # print(img_np.shape)      #28*28
+        img_np=img_np.reshape(1,1,28,28)       # batchsize=1,扩充通道,读取维度在Net中有分析
+        img_tensor=torch.Tensor(img_np).cuda()      # 要将数据放入cuda，否则报两设备错误
+        tag_=nn_net(img_tensor)     # 计算结果
+        # print(tag_)
+        res.append(torch.argmax(tag_,dim=1))
+    print(res)      # 注: 1和6很少出错，3和5几乎不出错，4基本不对(通过resize可以看出，4比较像7了，这和预处理相关)
+    # 主要原因还是，自己写的数据和国外测试数据差别是有的，除了相对复杂的3和5，写起来比较相近，其他的写法有些差异，这是数据特征的问题
+    # 其次，预处理图片时，对图片的主要特征保留也至关重要(比如这里的4预处理后变成7，就失真了)，所以预处理也是很重要的，必要时需要进行预训练
+
+path=r'D:\Pycharm\workplace\DLPytorch\Model\Manual_num\pic_28'
+test_man(path)
