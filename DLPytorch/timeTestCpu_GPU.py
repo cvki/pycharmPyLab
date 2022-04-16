@@ -68,11 +68,11 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import time
-import cv2.cv2 as cv
+import cv2 as cv
 import os
 
 '''b. 定义超参和全局模型评估参数'''
-EPOCHS = 2  # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
+EPOCHS = 3 # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
 BATCH_SIZE = 200  # 每批次处理数据数量
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # cuda或cpu
 LR = 0.002  # 学习率
