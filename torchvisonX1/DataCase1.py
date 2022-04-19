@@ -15,8 +15,8 @@ dataset_transform=torchvision.transforms.Compose([
 ])#将预处理操作放到Compose里封装
 
 #运行后会有网址提示，建议复制该连接去迅雷下载，然后将下载的离线包放在指定目录中
-trainSet=torchvision.datasets.CIFAR10(root=r'dataset',train=True,transform=dataset_transform,download=False)  #只要数据集下载过，那他就不会重复下载了，建议一直设置为True
-testSet=torchvision.datasets.CIFAR10(root=r'dataset',train=False,transform=dataset_transform,download=False)  #这里由于上传git很慢，就改成了false
+trainSet=torchvision.datasets.CIFAR10(root=r'../DL_Course/Datas/CIFAR10',train=True,transform=dataset_transform,download=False)  #只要数据集下载过，那他就不会重复下载了，建议一直设置为True
+testSet=torchvision.datasets.CIFAR10(root=r'../DL_Course/Datas/CIFAR10',train=False,transform=dataset_transform,download=False)  #这里由于上传git很慢，就改成了false
 
 # print(trainSet[0]) #从输出看，它包含图片信息和target两部分
 # print(trainSet.classes) #标签类别,以字典存储，可以ctrl+left
@@ -33,23 +33,23 @@ testSet=torchvision.datasets.CIFAR10(root=r'dataset',train=False,transform=datas
 
 '''DatalLoader使用'''
 testLoader=DataLoader(testSet,batch_size=24,shuffle=True,drop_last=False)
-# #CITAR10的__getitem__返回值
-# imgi,targeti=testSet[0]
-# print(imgi.shape)
+#CITAR10的__getitem__返回值
+imgi,targeti=testSet[0]
+print(imgi.shape)
 
-# writer2=SummaryWriter(r'log\step2')
-# step=2
-# for batchi in testLoader: #同理，batchi得到的是img和target，两个都是tensor
-#     #print(batchi[0].shape) #imgi的格式，batchsize一组的图像，4*3*32*32
-#     #print(batchi[1].shape) #标签数组，一维，batchsize个，即4
-#     #print(batchi)
-#     ##writer2.add_image('testdata',batchi[0],step)
-#     ##注意要使用方法add_images(),而不是add_image()否则会报错
-#     ##报错size of input tensor and input format are different. tensor shape: (4, 3, 32, 32), input_format: CHW
-#     imgi,targeti=batchi
-#     writer2.add_images('testData',imgi,step)
-#     step+=1 #每个for循环作为一步来查看debug
-# writer2.close()
+writer2=SummaryWriter(r'log\step2')
+step=2
+for batchi in testLoader: #同理，batchi得到的是img和target，两个都是tensor
+    #print(batchi[0].shape) #imgi的格式，batchsize一组的图像，4*3*32*32
+    #print(batchi[1].shape) #标签数组，一维，batchsize个，即4
+    #print(batchi)
+    ##writer2.add_image('testdata',batchi[0],step)
+    ##注意要使用方法add_images(),而不是add_image()否则会报错
+    ##报错size of input tensor and input format are different. tensor shape: (4, 3, 32, 32), input_format: CHW
+    imgi,targeti=batchi
+    writer2.add_images('testData',imgi,step)
+    step+=1     #每个for循环作为一步来查看debug
+writer2.close()
 
 
 

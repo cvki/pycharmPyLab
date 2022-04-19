@@ -72,7 +72,7 @@ import cv2 as cv
 import os
 
 '''b. 定义超参和全局模型评估参数'''
-EPOCHS = 3 # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
+EPOCHS = 3  # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
 BATCH_SIZE = 200  # 每批次处理数据数量
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')  # cuda或cpu
 LR = 0.002  # 学习率
@@ -118,8 +118,9 @@ print('every_train_loop: ', every_train_loop)
 every_test_loop = len(test_set) / BATCH_SIZE
 print('every_test_loop: ', every_test_loop)
 
-
 '''e. 构建网络模型'''
+
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
@@ -167,13 +168,13 @@ class Net(nn.Module):
 nn_net = Net().cuda()  # 使用默认GPU
 print(nn_net)
 
-
 '''f.定义损失函数和优化器'''
 loss_fun = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(params=nn_net.parameters(), lr=LR)
 
-
 '''g.定义画图'''
+
+
 # def plt_md(acc_model,loss_model,var_model):    # 精度图,loss图,方差图
 def plt_md(str, *kwg):  # 精度图,loss图,方差图
     y_loss, y_acc, x_range = kwg
@@ -193,6 +194,8 @@ def plt_md(str, *kwg):  # 精度图,loss图,方差图
 
 
 '''h.定义训练和测试方法'''
+
+
 def train(epoch):
     run_loss = 0.0  # 每次epoch的损失清零
     run_acc = 0.0  # 训练精度
@@ -230,6 +233,7 @@ def train(epoch):
         # 不加item()会输出该Tensor，里面有具体数据，也有些其他的，比如Device设备等
         print('batch_idx:{}\tepoch:{}\tloss:{:.5}\taccurancy:\t{:.3}'.format(batch_idx, epoch, loss.item(), acc.item()))
     # return loss_f, acc_f      # 当为全局变量时，不用返回
+
 
 def test():
     # 加载模型
@@ -269,6 +273,8 @@ def test():
 
 
 '''i.开始训练'''
+
+
 def train_on():
     begin = time.time()
     for epoch in np.arange(1, EPOCHS + 1):
@@ -283,57 +289,110 @@ def train_on():
     torch.save(nn_net, r'Model\MNIST.pt')
     plt_md('train_pic', loss_plt, acc_plt, int(EPOCHS * every_train_loop))  # 画出loss和accuracy图
 
-train_on()
 
-
-'''j.测试并分析'''
-test()
+# train_on()
+#
+#
+# '''j.测试并分析'''
+# test()
 
 
 '''识别自己的手写数据(自己画图测试的几个)'''
+
+
 class GetImg:
     def __init__(self, pathx):
-        self.pathx = pathx      # 文件路径
-        self.dirs = os.listdir(pathx)       # 所有文件名
-        self.files=[]       #  存放每个文件的路径+文件名
+        self.pathx = pathx  # 文件路径
+        self.dirs = os.listdir(pathx)  # 所有文件名
+        self.files = []  # 存放每个文件的路径+文件名
         for filename in self.dirs:
-            file_tmp=os.path.join(pathx,filename)    # 获取每个文件的路径+文件名
+            file_tmp = os.path.join(pathx, filename)  # 获取每个文件的路径+文件名
             self.files.append(file_tmp)
-    def pre_possess(self,path):
-        idx=np.arange(1,len(self.dirs)+1)
-        for i,imgpath in zip(idx,self.files):   # 这里注意zip和enumerate的区别
+
+    def pre_possess(self, path):
+        idx = np.arange(1, len(self.dirs) + 1)
+        for i, imgpath in zip(idx, self.files):  # 这里注意zip和enumerate的区别
             print(type(i))
-            img=cv.imread(imgpath)      # 通过文件路径读图片
-            imgv=cv.resize(img,(28,28))     # resize并保存，用来测试
+            img = cv.imread(imgpath)  # 通过文件路径读图片
+            imgv = cv.resize(img, (28, 28))  # resize并保存，用来测试
             # 批量保存图片并自动命名
-            cv.imwrite(path+'\\'+'pic%d.jpg'%i,imgv)
+            cv.imwrite(path + '\\' + 'pic%d.jpg' % i, imgv)
             # cv.imshow('img{}'.format(i),imgv)
             # cv.waitKey(0)
+
     def getfile(self):
         return self.pathx, self.files
+
 
 # 该例子已经处理好自己手写的图片了，就不再运行
 # gi = GetImg(r'D:\Pycharm\workplace\DLPytorch\Model\Manual_num')
 # gi.pre_possess()
 
-def test_man(path):     # path为手写图片的存储路径
-    res=[]      # 用来存储预测值
-    nn.net=torch.load(r'Model\MNIST.pt')       # 加载模型
-    img_files=GetImg(path)      # 加载图片
+def test_man(path):  # path为手写图片的存储路径
+    res = []  # 用来存储预测值
+    nn.net = torch.load(r'Model\MNIST.pt')  # 加载模型
+    img_files = GetImg(path)  # 加载图片
     # img_files.pre_possess(path)     # 这里已经有处理好的图片了，所以就执行它了
     # print(img_files.getfile())
-    _,pics=img_files.getfile()      # 我们只需要self.files，即图片路径+图片名
+    _, pics = img_files.getfile()  # 我们只需要self.files，即图片路径+图片名
     for imgs in pics:
-        img_np=cv.imread(imgs,flags=0)     # 灰度图读入
+        img_np = cv.imread(imgs, flags=0)  # 灰度图读入
         # print(img_np.shape)      #28*28
-        img_np=img_np.reshape(1,1,28,28)       # batchsize=1,扩充通道,读取维度在Net中有分析
-        img_tensor=torch.Tensor(img_np).cuda()      # 要将数据放入cuda，否则报两设备错误
-        tag_=nn_net(img_tensor)     # 计算结果
+        img_np = img_np.reshape(1, 1, 28, 28)  # batchsize=1,扩充通道,读取维度在Net中有分析
+        img_tensor = torch.Tensor(img_np).cuda()  # 要将数据放入cuda，否则报两设备错误
+        tag_ = nn_net(img_tensor)  # 计算结果
         # print(tag_)
-        res.append(torch.argmax(tag_,dim=1))
-    print(res)      # 注: 1和6很少出错，3和5几乎不出错，4基本不对(通过resize可以看出，4比较像7了，这和预处理相关)
+        res.append(torch.argmax(tag_, dim=1))
+    print(res)  # 注: 1和6很少出错，3和5几乎不出错，4基本不对(通过resize可以看出，4比较像7了，这和预处理相关)
     # 主要原因还是，自己写的数据和国外测试数据差别是有的，除了相对复杂的3和5，写起来比较相近，其他的写法有些差异，这是数据特征的问题
     # 其次，预处理图片时，对图片的主要特征保留也至关重要(比如这里的4预处理后变成7，就失真了)，所以预处理也是很重要的，必要时需要进行预训练
 
-path=r'D:\Pycharm\workplace\DLPytorch\Model\Manual_num\pic_28'
-test_man(path)
+
+# path=r'D:\Pycharm\workplace\DLPytorch\Model\Manual_num\pic_28'
+# test_man(path)
+
+
+x=[1,2,3,4,5]
+y=[3,6,7,9,2]
+# 实例化两个子图(1,2)表示1行2列
+fig,ax=plt.subplots(1,2)
+ax[0].plot(x,y,label='trend')
+ax[1].plot(x,y,color='cyan')
+ax[0].set_title('title 1')
+ax[1].set_title('title 2')
+
+# 测试和比较归一化和标准化
+pic_path = '../Datas/pic/wang.jpg'    # 注意路径，只向上推一个父目录，不是两个
+# path_test = os.listdir(pic_path)
+
+# 求整体的mean,std,min,max
+img_org = cv.imread(pic_path,cv.COLOR_RGB2BGR)
+img_orginal=np.array(img_org,dtype=float)
+
+img_mean=np.mean(img_orginal)
+img_std=np.std(img_orginal)
+img_min=np.min(img_orginal)
+img_max=np.max(img_orginal)
+print(img_max)
+
+img_guiyi=np.array([],dtype=float)
+img_normal=np.array([],dtype=float)
+
+img_guiyi=(img_orginal-img_min)/(img_max-img_min)*255.0
+img_guiyi=np.array(img_guiyi,dtype=int)
+img_normal=(img_orginal-img_mean)/img_std*255.0
+img_normal=np.array(img_normal,dtype=int)
+
+def plt_pic_tmp(*img):
+    c=len(img)
+    fig,ax=plt.subplots(1,c)
+    # fig.set_figheight(100)    # 设置画布高和宽
+    # fig.set_figwidth(100)
+    for i in range(c):
+        ax[i].set_title('pic{}'.format(i))
+        ax[i].imshow(img[i])
+    plt.show()
+plt_pic_tmp(img_org,img_guiyi,img_normal)
+
+# 求各通道上的mean,std,min,max
+

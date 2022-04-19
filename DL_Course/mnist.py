@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import time
 import cv2 as cv
 import os
+from torch.utils.tensorboard import SummaryWriter
 
 '''b. 定义超参和全局模型评估参数'''
 EPOCHS = 3 # 训练循环次数 (该网络模型Adam优化方法,不需要epoch)
@@ -38,6 +39,9 @@ loss_f = []  # 每次Epoch的当前loss
 var_f = []  # 每次Epoch的当前方差
 test_loss = []  # test-loss
 test_acc = []  # test-acc
+
+# tensorboard显示一下分错的图片
+writer=SummaryWriter(r'logs/mnist_log/')
 
 '''c. 定义预处理操作,tv.transforms'''
 pipline = transforms.Compose([  # Compose用来组合transforms的预处理操作
@@ -161,6 +165,7 @@ def train(epoch):
         # 数据放到GPU上,.cuda()表示放到默认GPU,指定GPU时用cuda中的device设定
         pic = pic.cuda()
         tag = tag.cuda()
+        print(np.shape(pic))    # 查看pic的CHW维度格式：batch*CHW
         '前馈网络训练'
         tag_ = nn_net(pic)  # nn_net在实例化已放入GPU,tag_是nn_net返回值,是batchsize*10的shape,是全连接的最后结果,但是注意,
         # 在nn_net()中没有e^x和log以及NLLoss,因此它并不是概率值,但它经过e^x和log(softmax,NLLoss)仍然是单调的,那此时值的大小可以理解为概率大小
@@ -175,6 +180,15 @@ def train(epoch):
         tag_v = torch.argmax(tag_, dim=1).cuda()
         acc = (tag_v == tag).sum() * 1.0 / BATCH_SIZE  # 获得预测准的总和,除去总预测的数据条目,化作准确率,注意这里的准确率计算是分batch的，而不是整个训练集
         acc_f.append(acc.item())
+
+        '具体画出分错的图片'
+        for j in np.arange(BATCH_SIZE):
+            if(tag_v[j].item()!=tag[j].item()):     # 具体画出分错的图片
+                pic_err = torch.reshape(pic[j],(28,28))   # 从batch中取出三维ndarray,一般不用reshape，以灰度图保存或查看需要reshape
+                # print(np.shape(picx_))  # 查看维度
+                writer.add_image(tag='TRAIN--{}'.format(tag_v[j]), img_tensor=pic_err,
+                                global_step=batch_idx*every_test_loop+j,dataformats='HW')
+                # writer.add_scalar('tmp',i,i)
 
         '反向传播'
         loss.backward()
@@ -192,11 +206,25 @@ def test():
     nn_net.eval()  # 模型验证
     with torch.no_grad():  # 因为这边是测试，因此不需要梯度，或者说不用计算梯度，也不能反向传播
         # 部署数据到CUDA
-        for (data, tag) in test_data:  # 这里用enumerate()会出问题
+        for i,(data, tag) in enumerate(test_data):  # 这里用enumerate()会出问题
             data, tag = data.to(DEVICE), tag.to(DEVICE)
             tag_test = nn_net(data)  # 进行测试
             los_avg = 0.0  # 存储平均损失
             v_t = None
+
+            # print(np.shape(data[i]))      # 查看维度
+            # print(type(tag_test))       # 查看类型,这里是个tensor
+
+            tag_v = torch.argmax(tag_test, dim=1).cuda()        # 每批dataset的预测标签值（200，）
+
+            '具体画出分错的图片'
+            for j in np.arange(BATCH_SIZE):
+                if(tag_v[j].item()!=tag[j].item()):     # 具体画出分错的图片
+                    pic_err = torch.reshape(data[j],(28,28))   # 从batch中取出三维ndarray,一般不用reshape，以灰度图保存或查看需要reshape
+                    # print(np.shape(picx_))  # 查看维度
+                    writer.add_image(tag='TEST--{}'.format(tag_v[j]), img_tensor=pic_err, global_step=i*every_test_loop+j,dataformats='HW')
+                    # writer.add_scalar('tmp',i,i)
+
 
             # 计算损失
             loss = loss_fun(tag_test, tag)
@@ -220,7 +248,7 @@ def test():
         # print('v_t',v_t)
         print('los_avg:', los_avg, '\t', 'acc_avg:', acc_avg)
         plt_md('test_pic', test_loss, test_acc, int(every_test_loop))  # 画出测试图
-
+    writer.close()
 
 '''i.开始训练'''
 def train_on():
@@ -237,7 +265,7 @@ def train_on():
     torch.save(nn_net, r'D:\PyCharm\PyLab\DL_Course\Module\MNIST.pt')
     plt_md('train_pic', loss_plt, acc_plt, int(EPOCHS * every_train_loop))  # 画出loss和accuracy图
 
-train_on()
+# train_on()
 
 
 '''j.测试并分析'''
